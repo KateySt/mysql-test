@@ -27,3 +27,52 @@ EXECUTE FUNCTION censor_bad_words();
 
 -- INSERT INTO comments (user_id, content) VALUES (1, 'That stupid idea is total crap');
 -- SELECT * FROM comments;
+
+
+---
+
+CREATE TABLE IF NOT EXISTS login_attempts (
+    id SERIAL PRIMARY KEY,
+    username TEXT NOT NULL,
+    success BOOLEAN NOT NULL,
+    attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE OR REPLACE FUNCTION check_login_rate()
+RETURNS TRIGGER AS $$
+DECLARE
+    recent_failures INTEGER;
+BEGIN
+    -- Count failed login attempts in the last 5 minutes
+    SELECT COUNT(*) INTO recent_failures
+    FROM login_attempts
+    WHERE username = NEW.username
+      AND success = FALSE
+      AND attempt_time > (CURRENT_TIMESTAMP - INTERVAL '5 minutes');
+
+    -- If 5 or more failures → block this attempt
+    IF recent_failures >= 5 THEN
+        RAISE EXCEPTION 'Too many failed login attempts for user % — please try again later.', NEW.username;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS prevent_brute_force ON login_attempts;
+
+CREATE TRIGGER prevent_brute_force
+BEFORE INSERT ON login_attempts
+FOR EACH ROW
+EXECUTE FUNCTION check_login_rate();
+
+-- Uncomment and run these manually for testing
+
+-- INSERT INTO login_attempts (username, success) VALUES ('hacker', FALSE);
+-- INSERT INTO login_attempts (username, success) VALUES ('hacker', FALSE);
+-- INSERT INTO login_attempts (username, success) VALUES ('hacker', FALSE);
+-- INSERT INTO login_attempts (username, success) VALUES ('hacker', FALSE);
+-- INSERT INTO login_attempts (username, success) VALUES ('hacker', FALSE);
+
+-- -- This 6th attempt (within 5 min) will be blocked
+-- INSERT INTO login_attempts (username, success) VALUES ('hacker', FALSE);
