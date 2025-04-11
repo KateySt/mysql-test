@@ -1,4 +1,3 @@
--- comments_censorship.sql
 
 CREATE TABLE IF NOT EXISTS comments (
     id SERIAL PRIMARY KEY,
